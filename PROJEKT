@@ -1,0 +1,126 @@
+Projekt ZSBD
+Struktura bazy danych 
+
+CREATE TABLE Platnosc(Platnosc_id number primary key, Status nvarchar2(40) CHECK(status IN ('Anulowana','Wprowadzona','Zaksiegowana')), Opis nvarchar2(40));
+CREATE TABLE Stolik_Klient(Stolik_Klient__id number primary key, Ilosc_osob number, Status_zamowienia nvarchar2(40) CHECK(Status_zamowienia IN ('Niezlozone','Zlozone','Zrealizowane','Zakonczone')));
+CREATE TABLE Dania(Danie_id number primary key, Cena number,Kategorie_id number, Opis nvarchar2(40));
+CREATE TABLE Kategorie(Kategorie_id number primary key, Nazwa nvarchar2(40), Opis nvarchar2(40));
+CREATE TABLE Zamowienia(Zamowienie_id number primary key, Danie_id number, Stolik_Klient__id number,Platnosc_id number, Ilosc number, Uwagi nvarchar2(60),Status_zamowienia nvarchar2(40) CHECK(Status_zamowienia IN ('Przyjete','Zrealizowane','Oplacone')), Wartosc number);
+
+ALTER TABLE Zamowienia
+ADD CONSTRAINT Zamowienia_Platnosc
+FOREIGN KEY(Platnosc_id) REFERENCES Platnosc(Platnosc_id);
+
+ALTER TABLE Zamowienia
+ADD CONSTRAINT Zamowienia_Stolik_Klient
+FOREIGN KEY(Stolik_Klient__id) REFERENCES Stolik_Klient(Stolik_Klient__id);
+
+ALTER TABLE Zamowienia
+ADD CONSTRAINT Zamowienia_Dania
+FOREIGN KEY(Danie_id) REFERENCES Dania(Danie_id);
+
+ALTER TABLE Dania
+ADD CONSTRAINT Dania_Kategorie
+FOREIGN KEY(Kategorie_id) REFERENCES Kategorie(Kategorie_id);
+
+Insert into Kategorie(Kategorie_id, Nazwa, Opis) Values(1, 'Przystawki', 'Dania na zimno');
+Insert into Kategorie(Kategorie_id, Nazwa, Opis) Values(2, 'Zupy', 'Dania na cieplo');
+Insert into Kategorie(Kategorie_id, Nazwa, Opis) Values(3, 'Dania Glowne', 'Dania miesne z dodatkami');
+Insert into Kategorie(Kategorie_id, Nazwa, Opis) Values(4, 'Desery', 'Dania na slodko');
+Insert into Kategorie(Kategorie_id, Nazwa, Opis) Values(5, 'Salatki', 'Dania wegetarianskie');
+
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(1, 21, 1,'Tatar');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(2, 25, 1,'Deska serow');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(3, 15, 2,'Ogorkowka');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(4, 12, 2,'Rosol');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(5, 26, 3,'Burger');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(6, 29, 3,'Kaczka');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(7, 13, 4,'Sernik na zimno');
+Insert into Dania(Danie_id, Cena, Kategorie_id, Opis) Values(8, 14, 5,'Salatka Cesar');
+
+Insert Into Stolik_Klient(Stolik_Klient__id, Ilosc_osob, Status_zamowienia) Values(1,5,'Zrealizowane');
+Insert Into Stolik_Klient(Stolik_Klient__id, Ilosc_osob, Status_zamowienia) Values(2,2,'Zlozone');
+
+Insert Into Zamowienia(Zamowienie_id, Danie_id, Stolik_Klient__id, Ilosc, Uwagi, Status_zamowienia, Wartosc) Values(1,4,1,5,'Bez pomidora','Zrealizowane',130);
+Insert Into Zamowienia(Zamowienie_id, Danie_id, Stolik_Klient__id, Ilosc, Uwagi, Status_zamowienia, Wartosc) Values(2,6,2,2,'Z frytkami','Przyjete',58);
+
+Insert Into Platnosc(platnosc_id, status, Opis) Values(1,'Wprowadzona', 'Gotowka');
+Update Platnosc set Status = 'Zaksiegowana' where platnosc_id = 1
+
+delete from Platnosc where platnosc_id = 1
+
+ALTER TABLE Platnosc ROW ARCHIVAL;
+
+SELECT COUNT(*) FROM Platnosc;
+
+update Platnosc 
+set    ora_archive_state = '1'
+where platnosc_id = 1
+
+ALTER SESSION SET ROW ARCHIVAL VISIBILITY = ALL;
+select * from Platnosc
+
+ALTER SESSION SET ROW ARCHIVAL VISIBILITY = Active;
+select * from Platnosc
+
+create or replace PROCEDURE GOTOWKA(WART IN Zamowienia.Wartosc%TYPE)
+  IS
+    wartosc_too_low  EXCEPTION;
+      min_WART NUMBER := 100;
+  BEGIN
+  IF WART < min_WART THEN
+      RAISE wartosc_too_low;  -- raise the exception
+    END IF;
+      EXCEPTION
+    WHEN wartosc_too_low THEN
+    DBMS_OUTPUT.PUT_LINE('Za mala kwota na platnosc karta, kwota musi byc wieksza od ' || min_WART || '.');
+  END ;
+
+create or replace NONEDITIONABLE PROCEDURE ZamowioneDania(ID IN zamowienia.stolik_klient__id%TYPE)
+  IS
+    stolik zamowienia.stolik_klient__id%type;
+    danie Dania.Opis%type;
+  BEGIN
+  SELECT Zamowienia.stolik_klient__id,Dania.Opis INTO stolik, danie FROM Zamowienia
+  join Dania on Zamowienia.Danie_id = Dania.Danie_id WHERE Stolik_klient__id = ID; 
+   DBMS_OUTPUT.PUT_LINE('Stolik nr. ' || stolik || ' zamowil ' || danie);
+  END;
+
+create or replace NONEDITIONABLE FUNCTION ZamowieniaZeStatusem(stat in zamowienia.status_zamowienia%type)
+return number  is zam_num number;
+begin 
+ select count(*) into zam_num from Zamowienia where status_zamowienia = stat;
+ return zam_num;
+end ZamowieniaZeStatusem;
+
+create or replace NONEDITIONABLE FUNCTION MozliwaIloscOsob(ilosc in stolik_klient.ilosc_osob%type)
+return boolean is 
+begin 
+if ilosc > 12 then return false;
+else 
+return true;
+end if;
+end MozliwaIloscOsob;
+
+CREATE TRIGGER wartoscZaMala
+BEFORE INSERT OR UPDATE OF Wartosc
+ON Zamowienia
+FOR EACH ROW
+BEGIN
+IF :NEW.Wartosc>100 THEN
+RAISE_APPLICATION_ERROR(-20500,'za mala wartosc');
+END IF;
+END;
+
+create or replace NONEDITIONABLE PROCEDURE Raaport(WART IN Number)
+  IS
+      suma number;
+
+  BEGIN
+  SELECT sum(wartosc) into suma FROM Zamowienia
+         WHERE TRUNC(SCN_TO_TIMESTAMP(ORA_ROWSCN),'month') = ADD_MONTHS(trunc(sysdate, 'MONTH'), -WART);
+
+  insert into Zestawienia(suma, monthsback,createddate) values(suma, WART,CURRENT_DATE);
+
+    DBMS_OUTPUT.PUT_LINE('Za ostatnie ' || WART || ' miesiac/miesiecy. Wartosc zamowien wynosi ' || suma || '.');
+  END ;
